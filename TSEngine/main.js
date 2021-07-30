@@ -27,6 +27,8 @@ var TSE;
             TSE.gl.clearColor(0, 0, 0, 1);
             this.loadShaders();
             this._shader.use();
+            this.createBuffer();
+            this.resize();
             this.loop();
         };
         /**
@@ -40,10 +42,29 @@ var TSE;
         };
         Engine.prototype.loop = function () {
             TSE.gl.clear(TSE.gl.COLOR_BUFFER_BIT);
+            TSE.gl.bindBuffer(TSE.gl.ARRAY_BUFFER, this._buffer);
+            TSE.gl.vertexAttribPointer(0, 3, TSE.gl.FLOAT, false, 0, 0);
+            TSE.gl.enableVertexAttribArray(0);
+            TSE.gl.drawArrays(TSE.gl.TRIANGLES, 0, 3);
             requestAnimationFrame(this.loop.bind(this));
         };
+        Engine.prototype.createBuffer = function () {
+            this._buffer = TSE.gl.createBuffer();
+            var vertices = [
+                // x,y,z
+                0, 0, 0,
+                0, 0.5, 0,
+                0.5, 0.5, 0
+            ];
+            TSE.gl.bindBuffer(TSE.gl.ARRAY_BUFFER, this._buffer);
+            TSE.gl.vertexAttribPointer(0, 3, TSE.gl.FLOAT, false, 0, 0);
+            TSE.gl.enableVertexAttribArray(0);
+            TSE.gl.bufferData(TSE.gl.ARRAY_BUFFER, new Float32Array(vertices), TSE.gl.STATIC_DRAW);
+            TSE.gl.bindBuffer(TSE.gl.ARRAY_BUFFER, undefined);
+            TSE.gl.disableVertexAttribArray(0);
+        };
         Engine.prototype.loadShaders = function () {
-            var vertexShaderSource = "\n                attribute vec3 a_position;\n                void main() {\n                    gl_Position = vec4(a_position, 1.0);\n                }";
+            var vertexShaderSource = "\n                attribute vec3 a_position;                \n                void main() {\n                    gl_Position = vec4(a_position, 1.0);\n                }";
             var fragmentShaderSource = "\n                precision mediump float;\n                void main() {\n                    gl_FragColor = vec4(1.0);\n                }\n                ";
             this._shader = new TSE.Shader('basic', vertexShaderSource, fragmentShaderSource);
         };
