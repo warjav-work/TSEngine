@@ -4,6 +4,8 @@ var TSE;
         function Engine() {
             console.log("Hello World");
         }
+        Engine.prototype.start = function () {
+        };
         return Engine;
     }());
     TSE.Engine = Engine;
