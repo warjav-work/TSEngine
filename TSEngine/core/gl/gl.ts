@@ -1,12 +1,12 @@
 ﻿namespace TSE {
     /**
      * The WebGL rendering context.
-     * */
+     */
     export var gl: WebGLRenderingContext;
 
     /**
      * Responsible for setting up a WebGL rendering context.
-     * */
+     */
     export class GLUtilities {
 
         /**
