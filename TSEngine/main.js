@@ -27,7 +27,11 @@ var TSE;
             TSE.gl.clearColor(0, 0, 0, 1);
             this.loadShaders();
             this._shader.use();
-            this.createBuffer();
+            // Load
+            this._projection = TSE.Matrix4x4.orthograthic(0, this._canvas.width, 0, this._canvas.height, -1.0, 100.0);
+            this._sprite = new TSE.Sprite("test");
+            this._sprite.load();
+            this._sprite.position.x = 200;
             this.resize();
             this.loop();
         };
@@ -38,7 +42,7 @@ var TSE;
             if (this._canvas !== null && this._canvas !== undefined) {
                 this._canvas.width = window.innerWidth;
                 this._canvas.height = window.innerHeight;
-                TSE.gl.viewport(0, 0, window.innerWidth, window.innerHeight);
+                TSE.gl.viewport(-1, 1, 1, -1);
             }
         };
         Engine.prototype.loop = function () {
@@ -46,29 +50,15 @@ var TSE;
             // Set uniforms.
             var colorPosition = this._shader.getUniformLocation("u_color");
             TSE.gl.uniform4f(colorPosition, 1, 0.5, 0, 1);
-            this._buffer.bind();
-            this._buffer.draw();
+            var projectionPosition = this._shader.getUniformLocation("u_projection");
+            TSE.gl.uniformMatrix4fv(projectionPosition, false, new Float32Array(this._projection.data));
+            var modelLocation = this._shader.getUniformLocation("u_model");
+            TSE.gl.uniformMatrix4fv(modelLocation, false, new Float32Array(TSE.Matrix4x4.translation(this._sprite.position).data));
+            this._sprite.render();
             requestAnimationFrame(this.loop.bind(this));
         };
-        Engine.prototype.createBuffer = function () {
-            this._buffer = new TSE.GLBuffer(3);
-            var positionAttribute = new TSE.AttributeInfo();
-            positionAttribute.location = this._shader.getAttributeLocation("a_position");
-            positionAttribute.offset = 0;
-            positionAttribute.size = 3;
-            this._buffer.addAttributeLocation(positionAttribute);
-            var vertices = [
-                // x,y,z
-                0, 0, 0,
-                0, 0.5, 0,
-                0.5, 0.5, 0
-            ];
-            this._buffer.pushBackData(vertices);
-            this._buffer.upload();
-            this._buffer.unbind();
-        };
         Engine.prototype.loadShaders = function () {
-            var vertexShaderSource = "\n                attribute vec3 a_position;                \n                void main() {\n                    gl_Position = vec4(a_position, 1.0);\n                }";
+            var vertexShaderSource = "\n                attribute vec3 a_position;\n\n                uniform mat4 u_projection;\n                uniform mat4 u_model;\n\n                void main() {\n                    gl_Position = u_projection * u_model * vec4(a_position, 1.0);\n                }";
             var fragmentShaderSource = "\n                precision mediump float;\n\n                uniform vec4 u_color;\n                void main() {\n                    gl_FragColor = u_color;\n                }\n                ";
             this._shader = new TSE.Shader('basic', vertexShaderSource, fragmentShaderSource);
         };
@@ -361,5 +351,152 @@ var TSE;
         return Shader;
     }());
     TSE.Shader = Shader;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
+    var Sprite = /** @class */ (function () {
+        function Sprite(name, width, heigth) {
+            if (width === void 0) { width = 100; }
+            if (heigth === void 0) { heigth = 100; }
+            this.position = new TSE.Vector3();
+            this._name = name;
+            this._width = width;
+            this._height = heigth;
+        }
+        Sprite.prototype.load = function () {
+            this._buffer = new TSE.GLBuffer(3);
+            var positionAttribute = new TSE.AttributeInfo();
+            positionAttribute.location = 0;
+            positionAttribute.offset = 0;
+            positionAttribute.size = 3;
+            this._buffer.addAttributeLocation(positionAttribute);
+            var vertices = [
+                // x,y,z
+                0, 0, 0,
+                0, this._height, 0,
+                this._width, this._height, 0,
+                this._width, this._height, 0,
+                this._width, 0, 0,
+                0, 0, 0
+            ];
+            this._buffer.pushBackData(vertices);
+            this._buffer.upload();
+            this._buffer.unbind();
+        };
+        Sprite.prototype.update = function (time) {
+        };
+        Sprite.prototype.render = function () {
+            this._buffer.bind();
+            this._buffer.draw();
+        };
+        return Sprite;
+    }());
+    TSE.Sprite = Sprite;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
+    var Matrix4x4 = /** @class */ (function () {
+        function Matrix4x4() {
+            this._data = [];
+            this._data = [
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1
+            ];
+        }
+        Object.defineProperty(Matrix4x4.prototype, "data", {
+            get: function () {
+                return this._data;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Matrix4x4.identity = function () {
+            return new Matrix4x4();
+        };
+        Matrix4x4.orthograthic = function (left, rigth, bottom, top, nearClip, farClip) {
+            var matrix = new Matrix4x4();
+            var lr = 1.0 / (left - rigth);
+            var bt = 1.0 / (bottom - top);
+            var nf = 1.0 / (nearClip - farClip);
+            matrix._data[0] = -2.0 * lr;
+            matrix._data[5] = -2.0 * bt;
+            matrix._data[10] = 2.0 * nf;
+            matrix.data[12] = (left + rigth) * lr;
+            matrix.data[13] = (top + bottom) * bt;
+            matrix.data[14] = (farClip + nearClip) * nf;
+            return matrix;
+        };
+        Matrix4x4.translation = function (position) {
+            var matrix = new Matrix4x4();
+            matrix.data[12] = position.x;
+            matrix.data[13] = position.y;
+            matrix.data[14] = position.z;
+            return matrix;
+        };
+        return Matrix4x4;
+    }());
+    TSE.Matrix4x4 = Matrix4x4;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
+    var Vector3 = /** @class */ (function () {
+        function Vector3(x, y, z) {
+            if (x === void 0) { x = 0; }
+            if (y === void 0) { y = 0; }
+            if (z === void 0) { z = 0; }
+            this._x = x;
+            this._y = y;
+            this._z = z;
+        }
+        Object.defineProperty(Vector3.prototype, "x", {
+            get: function () {
+                return this._x;
+            },
+            set: function (value) {
+                this._x = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Vector3.prototype, "y", {
+            get: function () {
+                return this._y;
+            },
+            set: function (value) {
+                this._y = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Vector3.prototype, "z", {
+            get: function () {
+                return this._z;
+            },
+            set: function (value) {
+                this._z = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Vector3.prototype.toArray = function () {
+            return [this._x, this._y, this._z];
+        };
+        Vector3.prototype.toFloat32Array = function () {
+            return new Float32Array(this.toArray());
+        };
+        return Vector3;
+    }());
+    TSE.Vector3 = Vector3;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
+    var AssetManager = /** @class */ (function () {
+        function AssetManager() {
+        }
+        return AssetManager;
+    }());
+    TSE.AssetManager = AssetManager;
 })(TSE || (TSE = {}));
 //# sourceMappingURL=main.js.map
