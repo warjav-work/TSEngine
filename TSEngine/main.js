@@ -9,6 +9,51 @@ window.onresize = function () {
 };
 var TSE;
 (function (TSE) {
+    TSE.MESSAGE_ASSET_LOADER_ASSET_LOADED = "MESSAGE_ASSET_LOADER_ASSET_LOADED::";
+    var AssetManager = /** @class */ (function () {
+        function AssetManager() {
+        }
+        AssetManager.initialize = function () {
+            AssetManager._loaders.push(new TSE.ImageAssetLoader());
+        };
+        AssetManager.registrerLoader = function (loader) {
+            AssetManager._loaders.push(loader);
+        };
+        AssetManager.onAssetLoader = function (asset) {
+            AssetManager._loaderAssets[asset.name] = asset;
+            TSE.Message.send(TSE.MESSAGE_ASSET_LOADER_ASSET_LOADED + asset.name, this, asset);
+        };
+        AssetManager.loadAsset = function (assetName) {
+            var extension = assetName.split('.').pop().toLocaleLowerCase();
+            for (var _i = 0, _a = AssetManager._loaders; _i < _a.length; _i++) {
+                var loader = _a[_i];
+                if (loader.supportedExtensions.indexOf(extension) !== -1) {
+                    loader.loadAsset(assetName);
+                    return;
+                }
+            }
+            console.warn("Unable to load asset with extension " + extension + " because there is no loader associated with it.");
+        };
+        AssetManager.isAssetLoader = function (assetName) {
+            return AssetManager._loaderAssets[assetName] !== null && AssetManager._loaderAssets[assetName] !== undefined;
+        };
+        AssetManager.getAsset = function (assetName) {
+            if (this.isAssetLoader) {
+                return AssetManager._loaderAssets[assetName];
+            }
+            else {
+                AssetManager.loadAsset(assetName);
+            }
+            return undefined;
+        };
+        AssetManager._loaders = [];
+        AssetManager._loaderAssets = {};
+        return AssetManager;
+    }());
+    TSE.AssetManager = AssetManager;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
     /**
      * The game engine class.
      */
@@ -492,11 +537,174 @@ var TSE;
 })(TSE || (TSE = {}));
 var TSE;
 (function (TSE) {
-    var AssetManager = /** @class */ (function () {
-        function AssetManager() {
+    var MessagePriority;
+    (function (MessagePriority) {
+        MessagePriority[MessagePriority["NORMAL"] = 0] = "NORMAL";
+        MessagePriority[MessagePriority["HIGH"] = 1] = "HIGH";
+    })(MessagePriority = TSE.MessagePriority || (TSE.MessagePriority = {}));
+    var Message = /** @class */ (function () {
+        function Message(code, sender, context, priority) {
+            if (priority === void 0) { priority = MessagePriority.NORMAL; }
+            this.code = code;
+            this.sender = sender;
+            this.context = context;
+            this.priority = priority;
         }
-        return AssetManager;
+        Message.send = function (code, sender, context) {
+            TSE.MessageBus.post(new Message(code, sender, context, MessagePriority.NORMAL));
+        };
+        Message.sendPriority = function (code, sender, context) {
+            TSE.MessageBus.post(new Message(code, sender, context, MessagePriority.HIGH));
+        };
+        Message.subscribe = function (code, handler) {
+            TSE.MessageBus.addSubscription(code, handler);
+        };
+        Message.unsubscribe = function (code, handler) {
+            TSE.MessageBus.removeSubscription(code, handler);
+        };
+        return Message;
     }());
-    TSE.AssetManager = AssetManager;
+    TSE.Message = Message;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
+    /**
+     * The message manager responsible for sending messages across the system.
+     * */
+    var MessageBus = /** @class */ (function () {
+        /**
+         * Constructor hidden to prevent instantiation.
+         * */
+        function MessageBus() {
+        }
+        /**
+         * Add a subscription to the provided code using the provided handler.
+         * @param code The code to listen for.
+         * @param handler The handler to be subscribed.
+         */
+        MessageBus.addSubscription = function (code, handler) {
+            if (MessageBus._subscriptions === null && MessageBus._subscriptions === undefined) {
+                MessageBus._subscriptions[code] = [];
+            }
+            if (MessageBus._subscriptions[code].indexOf(handler) !== -1) {
+                console.warn("Attempting to add a duplicate handler to code: " + code + ". Subscription not added.");
+            }
+            else {
+                MessageBus._subscriptions[code].push(handler);
+            }
+        };
+        /**
+         * Removes a subscription to the provided code using the provided handler.
+         * @param code The code to listen for.
+         * @param handler The handler to be unsubscribed.
+         */
+        MessageBus.removeSubscription = function (code, handler) {
+            if (MessageBus._subscriptions === null && MessageBus._subscriptions === undefined) {
+                console.warn("Cannot unsubscribe handler from code: " + code + ". Because the code is not subscribed to.");
+                return;
+            }
+            var nodeIndex = MessageBus._subscriptions[code].indexOf(handler);
+            if (nodeIndex !== -1) {
+                MessageBus._subscriptions[code].splice(nodeIndex, 1);
+            }
+        };
+        /**
+         * Post the provided message to the message system.
+         * @param message The message to be send.
+         */
+        MessageBus.post = function (message) {
+            console.log("Message posted:", message);
+            var handlers = MessageBus._subscriptions[message.code];
+            if (handlers === null && handlers === undefined) {
+                return;
+            }
+            for (var _i = 0, handlers_1 = handlers; _i < handlers_1.length; _i++) {
+                var handler = handlers_1[_i];
+                if (message.priority === TSE.MessagePriority.HIGH) {
+                    handler.onMessage(message);
+                }
+                else {
+                    MessageBus._normalMessageQueue.push(new TSE.MessageSubscriptionNode(message, handler));
+                }
+            }
+        };
+        MessageBus.update = function (time) {
+            if (MessageBus._normalMessageQueue.length === 0) {
+                return;
+            }
+            var messageLimit = Math.min(MessageBus._normalQueueMessageUpdate, MessageBus._normalMessageQueue.length);
+            for (var i = 0; i < messageLimit; i++) {
+                var node = MessageBus._normalMessageQueue.pop();
+                node.handler.onMessage(node.message);
+            }
+        };
+        MessageBus._subscriptions = {};
+        MessageBus._normalQueueMessageUpdate = 10;
+        MessageBus._normalMessageQueue = [];
+        return MessageBus;
+    }());
+    TSE.MessageBus = MessageBus;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
+    var MessageSubscriptionNode = /** @class */ (function () {
+        function MessageSubscriptionNode(message, handler) {
+            this.message = message;
+            this.handler = handler;
+        }
+        return MessageSubscriptionNode;
+    }());
+    TSE.MessageSubscriptionNode = MessageSubscriptionNode;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
+    var ImageAssetLoader = /** @class */ (function () {
+        function ImageAssetLoader() {
+        }
+        Object.defineProperty(ImageAssetLoader.prototype, "supportedExtensions", {
+            get: function () {
+                return ["png", "gif", "jpg"];
+            },
+            enumerable: false,
+            configurable: true
+        });
+        ImageAssetLoader.prototype.loadAsset = function (assetName) {
+            var image = new Image();
+            image.onload = this.onImageLoader.bind(this, assetName, image);
+            image.src = assetName;
+        };
+        ImageAssetLoader.prototype.onImageLoader = function (assetName, image) {
+            console.log("onImageLoader: assetName/image", assetName, image);
+            var asset = new TSE.ImageAsset(assetName, image);
+            TSE.AssetManager.onAssetLoader(asset);
+        };
+        return ImageAssetLoader;
+    }());
+    TSE.ImageAssetLoader = ImageAssetLoader;
+})(TSE || (TSE = {}));
+var TSE;
+(function (TSE) {
+    var ImageAsset = /** @class */ (function () {
+        function ImageAsset(name, data) {
+            this.name = name;
+            this.data = data;
+        }
+        Object.defineProperty(ImageAsset.prototype, "width", {
+            get: function () {
+                return this.data.width;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(ImageAsset.prototype, "height", {
+            get: function () {
+                return this.data.height;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        return ImageAsset;
+    }());
+    TSE.ImageAsset = ImageAsset;
 })(TSE || (TSE = {}));
 //# sourceMappingURL=main.js.map
